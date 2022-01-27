@@ -17,15 +17,11 @@ import (
 )
 
 type Server struct {
-	mux        *http.ServeMux
-	middleware []http.Handler
+	mux *http.ServeMux
 }
 
-func New(middleware ...http.Handler) *Server {
-	return &Server{
-		mux:        http.NewServeMux(),
-		middleware: middleware,
-	}
+func New() *Server {
+	return &Server{mux: http.NewServeMux()}
 }
 
 func (s *Server) Route(pattern string, target *url.URL) error {
