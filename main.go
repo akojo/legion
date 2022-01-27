@@ -1,42 +1,56 @@
 package main
 
 import (
-	"context"
 	"flag"
+	"fmt"
 	"log"
-	"net/http"
+	"net/url"
 	"os"
-	"os/signal"
-	"syscall"
+
+	"github.com/akojo/legion/server"
 )
 
 func main() {
+	var routes routeFlags
 	cwd, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
 	}
-	rootDir := flag.String("dir", cwd, "`directory` to serve files from")
 	listenAddr := flag.String("listen", ":8000", "`address` to listen on")
 	quiet := flag.Bool("quiet", false, "disable request logging")
+	flag.Var(&routes, "route", fmt.Sprintf(`route specification (default "/=%s")
+
+Routes are specified with <source>=<target>. -route option can be
+specified multiple times.
+
+<source> can be either
+    - path, e.g. /api
+    - path prefixed by a hostname, e.g. www.example.com/api
+In the latter case the path matches a request only when request Host:
+header matches given hostname.
+
+<target> can be either
+    - local filesystem path, e.g. /var/www/html
+    - URL to proxy requests to, e.g. www.example.com/api/v1
+In either case source path is first stripped from incoming requests and
+the result is appended to target.
+
+As an example, given options
+    -route /api=https://www.example.com/v1 -route /=/var/www/html
+incoming paths map to actual requests:
+	- /index.html -> /var/www/html/index.html
+	- /api/pets/1 -> https://www.example.com/v1/pets/1`, cwd))
 	flag.Parse()
 
-	handler := http.FileServer(http.Dir(*rootDir))
-	if !*quiet {
-		handler = logRequest(handler)
+	if len(routes) == 0 {
+		routes = routeFlags{{path: "/", target: &url.URL{Path: cwd}}}
 	}
 
-	server := http.Server{Addr: *listenAddr, Handler: handler}
-	go func() {
-		if err := server.ListenAndServe(); err != nil {
-			log.Printf("listen: %s\n", err)
+	srv := server.New()
+	for _, route := range routes {
+		if err := srv.Route(route.path, route.target); err != nil {
+			log.Fatal(err)
 		}
-	}()
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	if err := server.Shutdown(context.Background()); err != nil {
-		log.Printf("shutdown: %s\n", err)
 	}
+	srv.Run(*listenAddr, !*quiet)
 }

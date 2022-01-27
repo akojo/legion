@@ -1,4 +1,4 @@
-package main
+package logger
 
 import (
 	"io"
@@ -25,7 +25,7 @@ func init() {
 	log.SetOutput(&timestampWriter{log.Writer()})
 }
 
-func logRequest(next http.Handler) http.HandlerFunc {
+func Middleware(next http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		resp := &writer{rw: w, code: http.StatusOK}
 		start := time.Now()
