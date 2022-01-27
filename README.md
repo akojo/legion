@@ -11,6 +11,17 @@ application.
 In addition `legion` acts as a showcase for several nifty features of Go's
 standard HTTP library.
 
+## Installing
+
+If you have `go` installed:
+
+```sh
+go install github.com/akojo/legion@latest
+```
+
+Otherwise you can grab a binary for your architecture from
+[Releases](https://github.com/akojo/legion/releases) page.
+
 ## Examples
 
 To serve files from current directory on port 8000:
