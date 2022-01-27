@@ -28,20 +28,20 @@ func New(middleware ...http.Handler) *Server {
 	}
 }
 
-func (s *Server) Route(path string, target *url.URL) error {
+func (s *Server) Route(pattern string, target *url.URL) error {
 	var handler http.Handler
 	var err error
-	path = strings.TrimRight(path, "/") + "/"
-	prefix := path[strings.Index(path, "/"):]
 	if target.Scheme == "" {
-		handler, err = makeStatic(prefix, target.Path)
+		handler, err = makeStatic(target.Path)
 	} else {
-		handler, err = makeProxy(prefix, target)
+		handler, err = makeProxy(target)
 	}
 	if err != nil {
 		return err
 	}
-	s.mux.Handle(path, handler)
+	pattern = strings.TrimRight(pattern, "/")
+	prefix := strings.TrimLeftFunc(pattern, func(r rune) bool { return r != '/' })
+	s.mux.Handle(pattern+"/", http.StripPrefix(prefix, handler))
 	return nil
 }
 
@@ -70,7 +70,7 @@ func (s *Server) Run(addr string, logEnabled bool) {
 	}
 }
 
-func makeStatic(prefix string, root string) (http.Handler, error) {
+func makeStatic(root string) (http.Handler, error) {
 	info, err := os.Stat(root)
 	if err != nil {
 		return nil, err
@@ -78,18 +78,12 @@ func makeStatic(prefix string, root string) (http.Handler, error) {
 	if !info.IsDir() {
 		return nil, fmt.Errorf("%s: not a directory", root)
 	}
-	return http.StripPrefix(strings.TrimSuffix(prefix, "/"), http.FileServer(http.Dir(root))), nil
+	return http.FileServer(http.Dir(root)), nil
 }
 
-func makeProxy(prefix string, target *url.URL) (http.Handler, error) {
+func makeProxy(target *url.URL) (http.Handler, error) {
 	if !strings.HasPrefix(target.Scheme, "http") {
 		return nil, fmt.Errorf("invalid scheme: %s", target.Scheme)
 	}
-	proxy := httputil.NewSingleHostReverseProxy(target)
-	next := proxy.Director
-	proxy.Director = func(r *http.Request) {
-		r.URL.Path = strings.TrimPrefix(r.URL.Path, prefix)
-		next(r)
-	}
-	return proxy, nil
+	return httputil.NewSingleHostReverseProxy(target), nil
 }
