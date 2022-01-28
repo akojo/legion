@@ -27,7 +27,7 @@ func New() *Server {
 func (s *Server) Route(pattern string, target *url.URL) error {
 	var handler http.Handler
 	var err error
-	if target.Scheme == "" {
+	if target.Scheme == "" || target.Scheme == "file" {
 		handler, err = makeStatic(target.Path)
 	} else {
 		handler, err = makeProxy(target)
