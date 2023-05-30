@@ -1,8 +1,8 @@
-FROM golang:1.20 AS build
+FROM golang:1.20-alpine AS build
 
 WORKDIR /go/src/app
 COPY . .
-RUN CGO_ENABLED=0 go build -o /go/bin/legion
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /go/bin/legion
 
 FROM gcr.io/distroless/static-debian11
 COPY --from=build /go/bin/legion /
