@@ -1,8 +1,10 @@
 package logger
 
 import (
+	"bufio"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"time"
 )
@@ -59,4 +61,9 @@ func (w *writer) Write(buf []byte) (int, error) {
 func (w *writer) WriteHeader(statusCode int) {
 	w.code = statusCode
 	w.rw.WriteHeader(statusCode)
+}
+
+func (w *writer) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	rc := http.NewResponseController(w.rw)
+	return rc.Hijack()
 }
