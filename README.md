@@ -101,6 +101,15 @@ incoming paths map to actual requests:
 - `/index.html` -> `/var/www/html/index.html`
 - `/api/pets/1` -> `https://www.example.com/v1/pets/1`
 
+## Forwarding headers
+
+When acting as a reverse proxy `legion` always adds forwarding headers
+(`X-Forwarded-For`, `X-Forwarded-Host` and `X-Forwarded-Proto`) to outgoing
+requests. An existing `X-Forwarded-For` in inbound request is retained and
+client IP is appended to its value.
+
+`Host` header of inbound requests is kept intact.
+
 ## Access log format
 
 `legion` prints access logs in machine-readable format. Fields are

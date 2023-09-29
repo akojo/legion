@@ -81,5 +81,13 @@ func makeProxy(target *url.URL) (http.Handler, error) {
 	if !strings.HasPrefix(target.Scheme, "http") {
 		return nil, fmt.Errorf("invalid scheme: %s", target.Scheme)
 	}
-	return httputil.NewSingleHostReverseProxy(target), nil
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.Out.Header["X-Forwarded-For"] = pr.In.Header["X-Forwarded-For"]
+			pr.SetXForwarded()
+			pr.SetURL(target)
+			pr.Out.Host = pr.In.Host
+		},
+	}
+	return proxy, nil
 }
