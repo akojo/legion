@@ -13,50 +13,62 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/akojo/legion/config"
 	"github.com/akojo/legion/logger"
 )
 
 type Server struct {
-	mux *http.ServeMux
+	config *config.Config
+	mux    *http.ServeMux
 }
 
-func New() *Server {
-	return &Server{mux: http.NewServeMux()}
+func New(config *config.Config) (*Server, error) {
+	srv := &Server{config: config, mux: http.NewServeMux()}
+	for _, route := range config.Routes {
+		if err := srv.AddRoute(route); err != nil {
+			return nil, err
+		}
+	}
+	return srv, nil
 }
 
-func (s *Server) AddRoute(pattern string, target *url.URL, log bool) error {
-	proxy, err := makeProxy(target)
+func (s *Server) AddRoute(route config.Route) error {
+	proxy, err := makeProxy(route.Target)
 	if err != nil {
 		return err
 	}
-	if log {
+	if s.config.EnableLog {
 		proxy.Transport = logger.NewLogger(proxy.Transport)
 	}
-	pattern = strings.TrimRight(pattern, "/")
-	prefix := strings.TrimLeftFunc(pattern, func(r rune) bool { return r != '/' })
-	s.mux.Handle(pattern+"/", http.StripPrefix(prefix, proxy))
+	prefix := strings.TrimLeftFunc(route.Source, func(r rune) bool { return r != '/' })
+	s.mux.Handle(route.Source+"/", http.StripPrefix(prefix, proxy))
 	return nil
+
 }
 
-func (s *Server) Run(addr string) {
-	server := http.Server{Addr: addr, Handler: http.Handler(s.mux)}
+func (s *Server) Run() error {
+	server := http.Server{Addr: s.config.Addr, Handler: http.Handler(s.mux)}
+	quit := make(chan os.Signal, 1)
+	hangup := make(chan error)
+
 	go func() {
 		err := server.ListenAndServe()
 		if errors.Is(err, http.ErrServerClosed) {
-			slog.Info(fmt.Sprintf("listen: %s", err))
+			slog.Info("server closed")
 		} else if err != nil {
-			slog.Error(fmt.Sprintf("listen: %s", err))
-			os.Exit(1)
+			hangup <- err
 		}
 	}()
 
-	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
 
-	if err := server.Shutdown(context.Background()); err != nil {
-		slog.Warn(fmt.Sprintf("shutdown: %s", err))
+	select {
+	case <-quit:
+		return server.Shutdown(context.Background())
+	case err := <-hangup:
+		return err
 	}
+
 }
 
 func makeProxy(target *url.URL) (*httputil.ReverseProxy, error) {
