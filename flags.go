@@ -28,13 +28,13 @@ func (f *routeFlags) Set(value string) error {
 }
 
 func parseRoute(value string) (route, error) {
-	parts := strings.Split(value, "=")
-	if len(parts) != 2 {
+	source, target, found := strings.Cut(value, "=")
+	if !found {
 		return route{}, errors.New("missing '='")
 	}
-	url, err := url.Parse(strings.Join(parts[1:], "="))
+	url, err := url.Parse(target)
 	if err != nil {
 		return route{}, err
 	}
-	return route{path: parts[0], target: url}, nil
+	return route{path: source, target: url}, nil
 }
