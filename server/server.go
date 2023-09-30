@@ -83,17 +83,9 @@ func makeProxy(target *url.URL) (*httputil.ReverseProxy, error) {
 }
 
 func makeFileHandler(target *url.URL) (*httputil.ReverseProxy, error) {
-	root := target.Path
-	info, err := os.Stat(root)
-	if err != nil {
-		return nil, err
-	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("%s: not a directory", root)
-	}
 	proxy := &httputil.ReverseProxy{
 		Rewrite:   func(pr *httputil.ProxyRequest) {},
-		Transport: http.NewFileTransport(http.Dir(root)),
+		Transport: http.NewFileTransport(http.Dir(target.Path)),
 	}
 	return proxy, nil
 }

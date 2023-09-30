@@ -44,7 +44,7 @@ incoming paths map to actual requests:
 
 	routes := route.routes
 	if len(routes) == 0 {
-		routes = []Route{{Source: "", Target: &url.URL{Path: "."}}}
+		routes = []Route{NewRoute("/", &url.URL{Path: "."})}
 	}
 
 	return &Config{

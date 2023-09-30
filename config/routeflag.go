@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 )
 
@@ -33,5 +34,22 @@ func parseRoute(value string) (Route, error) {
 	if err != nil {
 		return Route{}, err
 	}
+	if err := validateTarget(targetURL); err != nil {
+		return Route{}, err
+	}
 	return NewRoute(source, targetURL), nil
+}
+
+func validateTarget(target *url.URL) error {
+	switch target.Scheme {
+	case "", "file":
+		info, err := os.Stat(target.Path)
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("%s: not a directory", target.Path)
+		}
+	}
+	return nil
 }
