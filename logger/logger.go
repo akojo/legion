@@ -1,69 +1,53 @@
 package logger
 
 import (
-	"bufio"
-	"io"
-	"log"
-	"net"
+	"log/slog"
 	"net/http"
+	"os"
 	"time"
 )
 
-type timestampWriter struct {
-	wrapped io.Writer
+type Transport struct {
+	Transport http.RoundTripper
+	logger    *slog.Logger
 }
 
-func (w *timestampWriter) Write(p []byte) (int, error) {
-	prefix := time.Now().UTC().Format(time.RFC3339Nano) + " "
-	if _, err := w.wrapped.Write([]byte(prefix)); err != nil {
-		return 0, err
-	}
-	return w.wrapped.Write(p)
-}
-
-func init() {
-	log.SetFlags(0)
-	log.SetPrefix("")
-	log.SetOutput(&timestampWriter{log.Writer()})
-}
-
-func Middleware(next http.Handler) http.HandlerFunc {
-	return func(w http.ResponseWriter, req *http.Request) {
-		resp := &writer{rw: w, code: http.StatusOK}
-		start := time.Now()
-		next.ServeHTTP(resp, req)
-		log.Printf("%d %s %s %s %d B %.3f ms %s",
-			resp.code,
-			req.Method,
-			req.Proto,
-			req.URL.EscapedPath(),
-			resp.bytes,
-			float64(time.Since(start).Microseconds())/1000.0,
-			req.Header.Get("User-Agent"))
+func NewLogger(transport http.RoundTripper) http.RoundTripper {
+	return &Transport{
+		Transport: transport,
+		logger: slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+				if a.Key == slog.MessageKey {
+					return slog.Attr{}
+				}
+				return a
+			},
+		})),
 	}
 }
 
-type writer struct {
-	rw    http.ResponseWriter
-	bytes int64
-	code  int
+func (l *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
+	start := time.Now()
+
+	resp, err := l.Transport.RoundTrip(req)
+	if err != nil {
+		return resp, err
+	}
+
+	go l.write(time.Since(start), req, resp.StatusCode)
+
+	return resp, err
 }
 
-func (w *writer) Header() http.Header {
-	return w.rw.Header()
-}
-
-func (w *writer) Write(buf []byte) (int, error) {
-	w.bytes += int64(len(buf))
-	return w.rw.Write(buf)
-}
-
-func (w *writer) WriteHeader(statusCode int) {
-	w.code = statusCode
-	w.rw.WriteHeader(statusCode)
-}
-
-func (w *writer) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	rc := http.NewResponseController(w.rw)
-	return rc.Hijack()
+func (l *Transport) write(duration time.Duration, req *http.Request, status int) {
+	l.logger.Info(
+		"",
+		slog.Group("req",
+			slog.String("method", req.Method),
+			slog.String("proto", req.Proto),
+			slog.String("path", req.URL.EscapedPath())),
+		slog.Group("resp",
+			slog.Int("status_code", status)),
+		slog.Duration("duration", duration),
+		slog.String("user_agent", req.Header.Get("User-Agent")))
 }

@@ -112,25 +112,9 @@ client IP is appended to its value.
 
 ## Access log format
 
-`legion` prints access logs in machine-readable format. Fields are
-space-separated and don't contain any embedded spaces save for the last part
-that prints client's user agent string.
-
-The fields are, in order (see [logger.go](./logger.go)):
-
-- UTC Time in RFC3339 format
-- Reponse status code
-- Request Method
-- Request Protocol
-- Request Path, URL encoded
-- Reponse length in bytes, followed by space and `B`
-- Response time in milliseconds, with microsecond precision, followed by space
-  and `ms`
-- Rest of the line contains response user agent information (from request
-  `User-Agent` header)
-
-For example
+`legion` prints access logs in structured format using logfmt-compatible output.
+An example request log line is
 
 ```text
-2022-01-23T19:44:34Z 200 GET HTTP/1.1 / 193 B 0.171 ms curl/7.77.0
+time=2006-01-02T15:04:05Z07:00 level=INFO req.method=GET req.proto=HTTP/1.1 req.path=/ resp.status_code=200 duration=837.4µs user_agent=curl/8.0.1
 ```

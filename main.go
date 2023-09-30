@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/url"
 	"os"
 
@@ -11,10 +11,13 @@ import (
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, nil)))
+
 	var routes routeFlags
 	cwd, err := os.Getwd()
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(fmt.Sprintf("%s", err))
+		os.Exit(1)
 	}
 	listenAddr := flag.String("listen", ":8000", "`address` to listen on")
 	quiet := flag.Bool("quiet", false, "disable request logging")
@@ -48,9 +51,10 @@ incoming paths map to actual requests:
 
 	srv := server.New()
 	for _, route := range routes {
-		if err := srv.Route(route.path, route.target); err != nil {
-			log.Fatal(err)
+		if err := srv.AddRoute(route.path, route.target, !*quiet); err != nil {
+			slog.Error(fmt.Sprintf("%s", err))
+			os.Exit(1)
 		}
 	}
-	srv.Run(*listenAddr, !*quiet)
+	srv.Run(*listenAddr)
 }

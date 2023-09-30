@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -24,36 +24,29 @@ func New() *Server {
 	return &Server{mux: http.NewServeMux()}
 }
 
-func (s *Server) Route(pattern string, target *url.URL) error {
-	var handler http.Handler
-	var err error
-	if target.Scheme == "" || target.Scheme == "file" {
-		handler, err = makeStatic(target.Path)
-	} else {
-		handler, err = makeProxy(target)
-	}
+func (s *Server) AddRoute(pattern string, target *url.URL, log bool) error {
+	proxy, err := makeProxy(target)
 	if err != nil {
 		return err
 	}
+	if log {
+		proxy.Transport = logger.NewLogger(proxy.Transport)
+	}
 	pattern = strings.TrimRight(pattern, "/")
 	prefix := strings.TrimLeftFunc(pattern, func(r rune) bool { return r != '/' })
-	s.mux.Handle(pattern+"/", http.StripPrefix(prefix, handler))
+	s.mux.Handle(pattern+"/", http.StripPrefix(prefix, proxy))
 	return nil
 }
 
-func (s *Server) Run(addr string, logEnabled bool) {
-	handler := http.Handler(s.mux)
-	if logEnabled {
-		handler = logger.Middleware(handler)
-	}
-	server := http.Server{Addr: addr, Handler: handler}
-
+func (s *Server) Run(addr string) {
+	server := http.Server{Addr: addr, Handler: http.Handler(s.mux)}
 	go func() {
 		err := server.ListenAndServe()
 		if errors.Is(err, http.ErrServerClosed) {
-			log.Printf("listen: %s", err)
+			slog.Info(fmt.Sprintf("listen: %s", err))
 		} else if err != nil {
-			log.Fatalf("listen: %s", err)
+			slog.Error(fmt.Sprintf("listen: %s", err))
+			os.Exit(1)
 		}
 	}()
 
@@ -62,11 +55,23 @@ func (s *Server) Run(addr string, logEnabled bool) {
 	<-quit
 
 	if err := server.Shutdown(context.Background()); err != nil {
-		log.Printf("shutdown: %s", err)
+		slog.Warn(fmt.Sprintf("shutdown: %s", err))
 	}
 }
 
-func makeStatic(root string) (http.Handler, error) {
+func makeProxy(target *url.URL) (*httputil.ReverseProxy, error) {
+	switch target.Scheme {
+	case "", "file":
+		return makeFileHandler(target)
+	case "http", "https":
+		return makeHTTPHandler(target)
+	default:
+		return nil, fmt.Errorf("invalid scheme: %s", target.Scheme)
+	}
+}
+
+func makeFileHandler(target *url.URL) (*httputil.ReverseProxy, error) {
+	root := target.Path
 	info, err := os.Stat(root)
 	if err != nil {
 		return nil, err
@@ -74,13 +79,14 @@ func makeStatic(root string) (http.Handler, error) {
 	if !info.IsDir() {
 		return nil, fmt.Errorf("%s: not a directory", root)
 	}
-	return http.FileServer(http.Dir(root)), nil
+	proxy := &httputil.ReverseProxy{
+		Rewrite:   func(pr *httputil.ProxyRequest) {},
+		Transport: http.NewFileTransport(http.Dir(root)),
+	}
+	return proxy, nil
 }
 
-func makeProxy(target *url.URL) (http.Handler, error) {
-	if !strings.HasPrefix(target.Scheme, "http") {
-		return nil, fmt.Errorf("invalid scheme: %s", target.Scheme)
-	}
+func makeHTTPHandler(target *url.URL) (*httputil.ReverseProxy, error) {
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.Out.Header["X-Forwarded-For"] = pr.In.Header["X-Forwarded-For"]
@@ -88,6 +94,7 @@ func makeProxy(target *url.URL) (http.Handler, error) {
 			pr.SetURL(target)
 			pr.Out.Host = pr.In.Host
 		},
+		Transport: http.DefaultTransport,
 	}
 	return proxy, nil
 }
