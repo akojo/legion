@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	"github.com/akojo/legion/config"
@@ -33,14 +32,12 @@ func New(config *config.Config) (*Server, error) {
 }
 
 func (s *Server) AddRoute(route config.Route) error {
-	proxy, err := makeProxy(route.Target)
+	handler, err := makeProxy(route.Target)
 	if err != nil {
 		return err
 	}
-	prefix := strings.TrimLeftFunc(route.Source, func(r rune) bool { return r != '/' })
-	s.mux.Handle(route.Source+"/", http.StripPrefix(prefix, proxy))
+	s.mux.Handle(route.Pattern(), http.StripPrefix(route.Prefix(), handler))
 	return nil
-
 }
 
 func (s *Server) Run() error {

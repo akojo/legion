@@ -1,20 +1,39 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
+	"path"
 	"strings"
 )
 
 type Route struct {
-	Source string
+	host   string
+	path   string
 	Target *url.URL
 }
 
-func NewRoute(source string, target *url.URL) Route {
-	return Route{Source: strings.TrimRight(source, "/"), Target: target}
+func NewRoute(source string, target *url.URL) (Route, error) {
+	pathStart := strings.IndexRune(source, '/')
+	if pathStart < 0 {
+		return Route{}, errors.New("source path must start with a '/'")
+	}
+	return Route{
+		host:   source[0:pathStart],
+		path:   strings.TrimRight(source[pathStart:], "/"),
+		Target: target,
+	}, nil
 }
 
 func (r Route) String() string {
-	return fmt.Sprintf("%s=%s", r.Source, r.Target.String())
+	return fmt.Sprintf("%s=%s", r.Pattern(), r.Target.String())
+}
+
+func (r Route) Pattern() string {
+	return path.Join(r.host, r.path) + "/"
+}
+
+func (r Route) Prefix() string {
+	return r.path
 }

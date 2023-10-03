@@ -37,7 +37,7 @@ func parseRoute(value string) (Route, error) {
 	if err := validateTarget(targetURL); err != nil {
 		return Route{}, err
 	}
-	return NewRoute(source, targetURL), nil
+	return NewRoute(source, targetURL)
 }
 
 func validateTarget(target *url.URL) error {
