@@ -4,50 +4,42 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 )
 
-type Transport struct {
-	Transport http.RoundTripper
-	logger    *slog.Logger
-}
+func Middleware(next http.Handler) http.HandlerFunc {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-func NewLogger(transport http.RoundTripper) http.RoundTripper {
-	return &Transport{
-		Transport: transport,
-		logger: slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
-				if a.Key == slog.MessageKey {
-					return slog.Attr{}
-				}
-				return a
-			},
-		})),
+	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		writer := &responseWriter{ResponseWriter: w}
+
+		next.ServeHTTP(writer, r)
+
+		logger.Info(
+			strconv.Itoa(writer.status)+" "+r.Method+" "+r.URL.Path,
+			slog.Group("req",
+				slog.String("method", r.Method),
+				slog.String("proto", r.Proto),
+				slog.String("path", r.URL.Path)),
+			slog.Group("resp",
+				slog.Int("status_code", writer.status)),
+			slog.Duration("duration", time.Since(start)),
+			slog.String("user_agent", r.Header.Get("User-Agent")))
 	}
 }
 
-func (l *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
-	start := time.Now()
-
-	resp, err := l.Transport.RoundTrip(req)
-	if err != nil {
-		return resp, err
-	}
-
-	go l.write(time.Since(start), req, resp.StatusCode)
-
-	return resp, err
+type responseWriter struct {
+	http.ResponseWriter
+	status int
 }
 
-func (l *Transport) write(duration time.Duration, req *http.Request, status int) {
-	l.logger.Info(
-		"",
-		slog.Group("req",
-			slog.String("method", req.Method),
-			slog.String("proto", req.Proto),
-			slog.String("path", req.URL.EscapedPath())),
-		slog.Group("resp",
-			slog.Int("status_code", status)),
-		slog.Duration("duration", duration),
-		slog.String("user_agent", req.Header.Get("User-Agent")))
+func (rw *responseWriter) Status() int {
+	return rw.status
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.status = code
+	rw.ResponseWriter.WriteHeader(code)
 }

@@ -37,9 +37,6 @@ func (s *Server) AddRoute(route config.Route) error {
 	if err != nil {
 		return err
 	}
-	if s.config.EnableLog {
-		proxy.Transport = logger.NewLogger(proxy.Transport)
-	}
 	prefix := strings.TrimLeftFunc(route.Source, func(r rune) bool { return r != '/' })
 	s.mux.Handle(route.Source+"/", http.StripPrefix(prefix, proxy))
 	return nil
@@ -47,7 +44,12 @@ func (s *Server) AddRoute(route config.Route) error {
 }
 
 func (s *Server) Run() error {
-	server := http.Server{Addr: s.config.Addr, Handler: http.Handler(s.mux)}
+	handler := http.Handler(s.mux)
+	if s.config.EnableLog {
+		handler = logger.Middleware(handler)
+	}
+
+	server := http.Server{Addr: s.config.Addr, Handler: handler}
 	quit := make(chan os.Signal, 1)
 	hangup := make(chan error)
 
@@ -71,7 +73,7 @@ func (s *Server) Run() error {
 
 }
 
-func makeProxy(target *url.URL) (*httputil.ReverseProxy, error) {
+func makeProxy(target *url.URL) (http.Handler, error) {
 	switch target.Scheme {
 	case "", "file":
 		return makeFileHandler(target)
@@ -82,7 +84,7 @@ func makeProxy(target *url.URL) (*httputil.ReverseProxy, error) {
 	}
 }
 
-func makeFileHandler(target *url.URL) (*httputil.ReverseProxy, error) {
+func makeFileHandler(target *url.URL) (http.Handler, error) {
 	proxy := &httputil.ReverseProxy{
 		Rewrite:   func(pr *httputil.ProxyRequest) {},
 		Transport: http.NewFileTransport(http.Dir(target.Path)),
@@ -90,7 +92,7 @@ func makeFileHandler(target *url.URL) (*httputil.ReverseProxy, error) {
 	return proxy, nil
 }
 
-func makeHTTPHandler(target *url.URL) (*httputil.ReverseProxy, error) {
+func makeHTTPHandler(target *url.URL) (http.Handler, error) {
 	proxy := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.Out.Header["X-Forwarded-For"] = pr.In.Header["X-Forwarded-For"]
