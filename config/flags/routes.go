@@ -1,4 +1,4 @@
-package config
+package flags
 
 import (
 	"errors"
@@ -6,38 +6,38 @@ import (
 	"net/url"
 	"os"
 	"strings"
+
+	"github.com/akojo/legion/server"
 )
 
-type routeFlag struct {
-	routes []Route
+type Routes []server.Route
+
+func (f *Routes) String() string {
+	return fmt.Sprintf("%v", []server.Route(*f))
 }
 
-func (f *routeFlag) String() string {
-	return fmt.Sprintf("%v", *f)
-}
-
-func (f *routeFlag) Set(value string) error {
+func (f *Routes) Set(value string) error {
 	route, err := parseRoute(value)
 	if err != nil {
 		return err
 	}
-	f.routes = append(f.routes, route)
+	*f = append(*f, route)
 	return nil
 }
 
-func parseRoute(value string) (Route, error) {
+func parseRoute(value string) (server.Route, error) {
 	source, target, found := strings.Cut(value, "=")
 	if !found {
-		return Route{}, errors.New("missing '='")
+		return server.Route{}, errors.New("missing '='")
 	}
 	targetURL, err := url.Parse(target)
 	if err != nil {
-		return Route{}, err
+		return server.Route{}, err
 	}
 	if err := validateTarget(targetURL); err != nil {
-		return Route{}, err
+		return server.Route{}, err
 	}
-	return NewRoute(source, targetURL)
+	return server.NewRoute(source, targetURL)
 }
 
 func validateTarget(target *url.URL) error {

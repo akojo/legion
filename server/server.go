@@ -12,16 +12,15 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/akojo/legion/config"
 	"github.com/akojo/legion/logger"
 )
 
 type Server struct {
-	config *config.Config
+	config *Config
 	mux    *http.ServeMux
 }
 
-func New(config *config.Config) (*Server, error) {
+func New(config *Config) (*Server, error) {
 	srv := &Server{config: config, mux: http.NewServeMux()}
 	for _, route := range config.Routes {
 		if err := srv.AddRoute(route); err != nil {
@@ -31,7 +30,7 @@ func New(config *config.Config) (*Server, error) {
 	return srv, nil
 }
 
-func (s *Server) AddRoute(route config.Route) error {
+func (s *Server) AddRoute(route Route) error {
 	handler, err := makeProxy(route.Target)
 	if err != nil {
 		return err

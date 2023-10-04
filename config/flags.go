@@ -4,9 +4,12 @@ import (
 	"flag"
 	"net"
 	"net/url"
+
+	"github.com/akojo/legion/config/flags"
+	"github.com/akojo/legion/server"
 )
 
-func ParseFlags() (*Config, error) {
+func ParseFlags() (*server.Config, error) {
 	addr := ":8000"
 	flag.Func("listen", "address to listen on (default :8000)", func(value string) error {
 		addr = value
@@ -16,8 +19,8 @@ func ParseFlags() (*Config, error) {
 
 	quiet := flag.Bool("quiet", false, "disable request logging")
 
-	var route routeFlag
-	flag.Var(&route, "route", `route specification (default "/=.")
+	var routes flags.Routes
+	flag.Var(&routes, "route", `route specification (default "/=.")
 
 Routes are specified with <source>=<target>. -route option can be
 specified multiple times.
@@ -42,13 +45,12 @@ incoming paths map to actual requests:
 
 	flag.Parse()
 
-	routes := route.routes
 	if len(routes) == 0 {
-		defaultRoute, _ := NewRoute("/", &url.URL{Path: "."})
-		routes = []Route{defaultRoute}
+		defaultRoute, _ := server.NewRoute("/", &url.URL{Path: "."})
+		routes = []server.Route{defaultRoute}
 	}
 
-	return &Config{
+	return &server.Config{
 		Addr:      addr,
 		EnableLog: !*quiet,
 		Routes:    routes,

@@ -1,4 +1,4 @@
-package config
+package server
 
 type Config struct {
 	Addr      string
