@@ -17,14 +17,15 @@ func Middleware(next http.Handler) http.HandlerFunc {
 
 		next.ServeHTTP(writer, r)
 
-		logger.Info(
+		logger.LogAttrs(
+			r.Context(),
+			slog.LevelInfo,
 			strconv.Itoa(writer.status)+" "+r.Method+" "+r.URL.Path,
-			slog.Group("req",
-				slog.String("method", r.Method),
-				slog.String("proto", r.Proto),
-				slog.String("path", r.URL.Path)),
-			slog.Group("resp",
-				slog.Int("status_code", writer.status)),
+			slog.String("method", r.Method),
+			slog.String("proto", r.Proto),
+			slog.String("path", r.URL.Path),
+			slog.String("address", r.Host),
+			slog.Int("status", writer.status),
 			slog.Duration("duration", time.Since(start)),
 			slog.String("user_agent", r.Header.Get("User-Agent")))
 	}
