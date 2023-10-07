@@ -22,7 +22,7 @@ func NewRoute(source string, target *url.URL) (Route, error) {
 	return Route{
 		host:   source[0:pathStart],
 		path:   strings.TrimRight(source[pathStart:], "/"),
-		Target: target,
+		Target: cleanPath(target),
 	}, nil
 }
 
@@ -36,4 +36,9 @@ func (r Route) Pattern() string {
 
 func (r Route) Prefix() string {
 	return r.path
+}
+
+func cleanPath(u *url.URL) *url.URL {
+	u.Path = strings.TrimRight(u.EscapedPath(), "/")
+	return u
 }

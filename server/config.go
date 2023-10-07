@@ -1,7 +1,9 @@
 package server
 
+import "log/slog"
+
 type Config struct {
-	Addr      string
-	EnableLog bool
-	Routes    []Route
+	Addr     string
+	LogLevel slog.Level
+	Routes   []Route
 }

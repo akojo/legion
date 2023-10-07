@@ -9,13 +9,18 @@ import (
 )
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, nil)))
+	var logLevel = new(slog.LevelVar)
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: logLevel,
+	})))
 
-	conf, err := config.ParseFlags()
+	conf, err := config.ReadConfig()
 	if err != nil {
 		slog.Error("invalid configuration", "error", err)
 		os.Exit(1)
 	}
+
+	logLevel.Set(slog.Level(conf.LogLevel))
 
 	srv, err := server.New(conf)
 	if err != nil {
@@ -23,7 +28,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := srv.Run(); err != nil {
+	err = srv.Run(slog.Default())
+	if err != nil {
 		slog.Error("server closed unexpectedly", "error", err)
 		os.Exit(1)
 	}

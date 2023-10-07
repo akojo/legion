@@ -2,22 +2,25 @@ package config
 
 import (
 	"flag"
+	"log/slog"
 	"net"
-	"net/url"
 
 	"github.com/akojo/legion/config/flags"
 	"github.com/akojo/legion/server"
 )
 
-func ParseFlags() (*server.Config, error) {
-	addr := ":8000"
+func ReadConfig() (*server.Config, error) {
+	configFile := flag.String("config", "", "path to configuration file")
+
+	var addr *string
 	flag.Func("listen", "address to listen on (default :8000)", func(value string) error {
-		addr = value
+		addr = &value
 		_, err := net.ResolveTCPAddr("tcp", value)
 		return err
 	})
 
-	quiet := flag.Bool("quiet", false, "disable request logging")
+	var level LogLevel
+	flag.Var(&level, "loglevel", "log level (info|warn|error)")
 
 	var routes flags.Routes
 	flag.Var(&routes, "route", `route specification (default "/=.")
@@ -45,14 +48,20 @@ incoming paths map to actual requests:
 
 	flag.Parse()
 
-	if len(routes) == 0 {
-		defaultRoute, _ := server.NewRoute("/", &url.URL{Path: "."})
-		routes = []server.Route{defaultRoute}
+	conf, err := ReadFile(*configFile)
+	if err != nil {
+		return nil, err
 	}
 
-	return &server.Config{
-		Addr:      addr,
-		EnableLog: !*quiet,
-		Routes:    routes,
-	}, nil
+	if addr != nil {
+		conf.Addr = *addr
+	}
+	if slog.Level(level) != slog.LevelInfo {
+		conf.LogLevel = slog.Level(level)
+	}
+	if len(routes) > 0 {
+		conf.Routes = routes
+	}
+
+	return conf, nil
 }

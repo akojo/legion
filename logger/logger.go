@@ -3,13 +3,11 @@ package logger
 import (
 	"log/slog"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 )
 
-func Middleware(next http.Handler) http.HandlerFunc {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+func Middleware(log *slog.Logger, next http.Handler) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -17,7 +15,7 @@ func Middleware(next http.Handler) http.HandlerFunc {
 
 		next.ServeHTTP(writer, r)
 
-		logger.LogAttrs(
+		log.LogAttrs(
 			r.Context(),
 			slog.LevelInfo,
 			strconv.Itoa(writer.status)+" "+r.Method+" "+r.URL.Path,

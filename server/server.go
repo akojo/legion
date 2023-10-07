@@ -21,7 +21,10 @@ type Server struct {
 }
 
 func New(config *Config) (*Server, error) {
-	srv := &Server{config: config, mux: http.NewServeMux()}
+	srv := &Server{
+		config: config,
+		mux:    http.NewServeMux(),
+	}
 	for _, route := range config.Routes {
 		if err := srv.AddRoute(route); err != nil {
 			return nil, err
@@ -39,20 +42,19 @@ func (s *Server) AddRoute(route Route) error {
 	return nil
 }
 
-func (s *Server) Run() error {
-	handler := http.Handler(s.mux)
-	if s.config.EnableLog {
-		handler = logger.Middleware(handler)
+func (s *Server) Run(log *slog.Logger) error {
+	server := http.Server{
+		Addr:    s.config.Addr,
+		Handler: logger.Middleware(log, s.mux),
 	}
 
-	server := http.Server{Addr: s.config.Addr, Handler: handler}
 	quit := make(chan os.Signal, 1)
 	hangup := make(chan error)
 
 	go func() {
 		err := server.ListenAndServe()
 		if errors.Is(err, http.ErrServerClosed) {
-			slog.Info("server closed")
+			log.Info("server closed")
 		} else if err != nil {
 			hangup <- err
 		}

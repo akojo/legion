@@ -22,7 +22,7 @@ go install github.com/akojo/legion@latest
 Otherwise you can grab a binary for your architecture from
 [Releases](https://github.com/akojo/legion/releases) page.
 
-## Examples
+## Get Started
 
 To serve files from current directory on port 8000:
 
@@ -34,81 +34,145 @@ As an another example, to
 
 - Start a server on port 3000, restricting access to local connections
 - Serve files from `static/` under current directory
-- Route requests to `/api/*` to a backend application on local port 3001:
+- Route requests to `/api/*` to a backend application over HTTP on localhost
+  port 3001
 
 ```sh
-legion -listen localhost:3000 -route /=$(pwd)/static -route /api=http://localhost:3001
+legion -listen localhost:3000 -route /=static -route /api=http://localhost:3001
 ```
 
-## Usage
+## Configuration
 
-Invoked without command-line arguments `legion` serves files from current
+`legion` accepts configuration both from a [configuration
+file](#configuration-file) and via [command-line
+options](#command-line-options). If both are specified, command-line options
+override simple values and append values to lists. For example, if you provide
+routes both in a configuration file and via command-line, command-line routes
+will be appended to the routes in configuration file.
+
+### Routing
+
+Most of `legion` configuration revolves around routes. Every route has two
+parts: a *source* and a *target*. Together they define where incoming requests
+will be routed.
+
+#### Sources
+
+Route source can be either
+
+- A plain path, e.g. `/api` or `/`
+- A path prefixed by a hostname, e.g. `www.example.com/api` or
+  `www.example.com/`
+
+Paths are prefix-matched to incoming request paths; longer paths always take
+precedence over shorter ones. Prefixing a path with a hostname restricts a route
+to match only when incoming request's `Host` header matches the given hostname.
+
+Source paths are always absolute; omitting the leading slash will result in an
+error.
+
+#### Targets
+
+Route target can be either
+
+- A local filesystem path, e.g. `/var/www/html`. Paths can be relative, in which
+  case they are interpreted relative to `legion`'s current working directory.
+  `file:` URLs are also accepted.
+- An HTTP/HTTPS URL, e.g. `https://www.example.com/api/v1`
+
+Given a local path `legion` serves files from the specified directory. If
+incoming request specifies a directory and the target directory contains a file
+named `index.html`, contents of `index.html` are returned instead. If requested
+filename is `index.html` and the file exists, request will be redirected to its
+parent directory.
+
+Given an HTTP/HTTPS URL `legion` acts as a reverse proxy, forwarding requests to
+the specified address. `legion` adds usual [forwarding
+headers](#forwarding-headers) to outgoing requests.
+
+#### Path Rewriting
+
+`legion` always performs path rewriting, stripping source path from incoming
+requests and then appending the remainder to target path.
+
+For example, given routes (see [configuration file syntax](#configuration-file)
+below)
+
+```yaml
+routes:
+  static:
+  - source: /
+    target: /var/www/html
+  proxy:
+  - source: /api
+    target: http://localhost:3000/v1
+```
+
+incoming requests map to targets as follows:
+
+- `/favicon.ico`: first route is selected and contents of file
+  `/var/www/html/favicon.ico` are returned
+- `/api/pets/1`: second route is selected and request is forwarded to
+  `http://localhost:3000/v1/pets/1`
+
+NB. in this case, according to `legion`'s routing rules, if file
+`/var/www/html/index.html` exists request to `/` will return its contents.
+
+### Default Configuration
+
+When started with an empty configuration `legion` serves files from current
 directory on port `8000` and writes access logs to stdout.
+
+### Command-line Options
 
 `legion` understands following command-line flags:
 
-- `-route <source>=<target>`
+- `-config <file>`
 
-  Route requests from `source` to `target`. Default value is `/=$PWD`, which
-  serves the contents of current directory. For more information, see "Routing"
-  below. Can be specified multiple times.
+  Read configuration from specified file. Configuration file format is
+  documented [below](#configuration-file)
 
 - `-listen <address>`
 
-  Listen on given address. Can be `hostname:port` or just `:port`. Defaults to
-  `:8000`.
+  Listen on given address. Can be `hostname:port`, `ip:port` or just `:port`.
 
-- `-quiet`
+- `-loglevel info|warn|error`
 
-  Disable request logging.
+  Set log level. Request logs are written with level "info" and can thus be
+  suppressed by setting level to either "warn" or "error".
 
-## Routing
+- `-route <source>=<target>`
 
-`legion` routes are specified with `<source>=<target>`. The specification
-consists of two parts: `source` which provides a routing rule match incoming
-request, and `target` which tells where to fetch the response.
+  Route requests from `source` to `target`. See [Routing](#routing) for
+  specifying sources and targets.
 
-`source` can be:
+### Configuration File
 
-- A plain path, e.g. `/api`
-- A path prefixed by a hostname, e.g. `www.example.com/api`
+Configuration file is written in YAML format. An example configuration file is
 
-In the latter case the path matches a request only when request's `Host` header
-matches given hostname.
-
-Source paths are always prefix rules and match a request for any path under the
-given enpoint. Given several paths with a common prefix, longest matching path
-is selected. You can read more about path matching from
-[Go's ServeMux documentation](https://pkg.go.dev/net/http#ServeMux). `legion`
-internally ensures that routes end with a `/` before installing handlers.
-
-`target` can be:
-
-- A local filesystem path, e.g. `/var/www/html`
-- An HTTP/HTTPS URL, e.g. `https://www.example.com/api/v1`
-
-In either case source path is first stripped from incoming requests and the
-result is appended to target.
-
-For example, given options
-
-```text
- -route /=/var/www/html -route /api=https://www.example.com/v1
+```yaml
+listen: localhost:8000
+loglevel: info
+routes:
+  static:
+  - source: /
+    target: /var/www/html
+  proxy:
+  - source: /api
+    target: http://localhost:3000/v1
 ```
 
-incoming paths map to actual requests:
-
-- `/index.html` -> `/var/www/html/index.html`
-- `/api/pets/1` -> `https://www.example.com/v1/pets/1`
+Unlike command-line flags, configuration file makes a distinction between
+different types of routes for better readability.
 
 ## Forwarding headers
 
 When acting as a reverse proxy `legion` always adds forwarding headers
 (`X-Forwarded-For`, `X-Forwarded-Host` and `X-Forwarded-Proto`) to outgoing
-requests. An existing `X-Forwarded-For` in inbound request is retained and
-client IP is appended to its value.
+requests. If an existing `X-Forwarded-For` is found in inbound request it is
+retained and client IP is appended to its value.
 
-`Host` header of inbound requests is kept intact.
+`Host` header of inbound requests is kept copied as-is to outgoing requests.
 
 ## Access log format
 
@@ -116,5 +180,5 @@ client IP is appended to its value.
 An example request log line is
 
 ```text
-time=2006-01-02T15:04:05Z07:00 level=INFO req.method=GET req.proto=HTTP/1.1 req.path=/ resp.status_code=200 duration=837.4µs user_agent=curl/8.0.1
+time=2006-01-02T15:04:05Z07:00 level=INFO msg="200 GET /" method=GET proto=HTTP/1.1 path=/ address=localhost:8000 status=200 duration=591.8µs user_agent=curl/8.0.1
 ```
