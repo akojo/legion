@@ -8,13 +8,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/akojo/legion/server"
+	"github.com/akojo/legion/handler"
 )
 
-type Routes []server.Route
+type Routes []handler.Route
 
 func (f *Routes) String() string {
-	return fmt.Sprintf("%v", []server.Route(*f))
+	return fmt.Sprintf("%v", []handler.Route(*f))
 }
 
 func (f *Routes) Set(value string) error {
@@ -26,19 +26,19 @@ func (f *Routes) Set(value string) error {
 	return nil
 }
 
-func parseRoute(value string) (server.Route, error) {
+func parseRoute(value string) (handler.Route, error) {
 	source, target, found := strings.Cut(value, "=")
 	if !found {
-		return server.Route{}, errors.New("missing '='")
+		return handler.Route{}, errors.New("missing '='")
 	}
 	targetURL, err := url.Parse(filepath.ToSlash(target))
 	if err != nil {
-		return server.Route{}, err
+		return handler.Route{}, err
 	}
 	if err := validateTarget(targetURL); err != nil {
-		return server.Route{}, err
+		return handler.Route{}, err
 	}
-	return server.NewRoute(source, targetURL)
+	return handler.NewRoute(source, targetURL)
 }
 
 func validateTarget(target *url.URL) error {

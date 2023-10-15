@@ -3,7 +3,7 @@ package file
 import (
 	"net/url"
 
-	"github.com/akojo/legion/server"
+	"github.com/akojo/legion/handler"
 )
 
 type Routes struct {
@@ -16,14 +16,14 @@ type Route struct {
 	Target string `yaml:"target"`
 }
 
-func (r Routes) Get() ([]server.Route, error) {
-	result := []server.Route{}
+func (r Routes) Get() ([]handler.Route, error) {
+	result := []handler.Route{}
 	for _, r := range append(r.Static, r.Proxy...) {
 		targetURL, err := url.Parse(r.Target)
 		if err != nil {
 			return nil, err
 		}
-		route, err := server.NewRoute(r.Source, targetURL)
+		route, err := handler.NewRoute(r.Source, targetURL)
 		if err != nil {
 			return nil, err
 		}

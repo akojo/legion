@@ -1,11 +1,19 @@
 package main
 
 import (
+	"context"
+	"crypto/tls"
+	"errors"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/akojo/legion/config"
-	"github.com/akojo/legion/server"
+	"github.com/akojo/legion/handler"
+	"github.com/akojo/legion/logger"
 )
 
 func main() {
@@ -22,15 +30,53 @@ func main() {
 
 	logLevel.Set(slog.Level(conf.LogLevel))
 
-	srv, err := server.New(conf)
+	h, err := handler.New(conf.Routes)
 	if err != nil {
-		slog.Error("server failed to start", "error", err)
-		os.Exit(1)
+		slog.Error("invalid routes", "error", err)
 	}
 
-	err = srv.Run(slog.Default())
-	if err != nil {
+	srv := &http.Server{
+		Handler:   logger.Middleware(slog.Default(), h),
+		TLSConfig: conf.TLS,
+	}
+
+	if err = listenAndServe(srv, conf.Addr); err != nil {
 		slog.Error("server closed unexpectedly", "error", err)
 		os.Exit(1)
 	}
+}
+
+func listenAndServe(srv *http.Server, addr string) error {
+	listener, err := listen(addr, srv.TLSConfig)
+	if err != nil {
+		return err
+	}
+
+	quit := make(chan os.Signal, 1)
+	hangup := make(chan error)
+
+	go func() {
+		err := srv.Serve(listener)
+		if errors.Is(err, http.ErrServerClosed) {
+			slog.Info("server closed")
+		} else if err != nil {
+			hangup <- err
+		}
+	}()
+
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case <-quit:
+		return srv.Shutdown(context.Background())
+	case err := <-hangup:
+		return err
+	}
+}
+
+func listen(addr string, tlsConfig *tls.Config) (net.Listener, error) {
+	if tlsConfig != nil {
+		return tls.Listen("tcp", addr, tlsConfig)
+	}
+	return net.Listen("tcp", addr)
 }

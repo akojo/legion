@@ -1,15 +1,23 @@
 package config
 
 import (
+	"crypto/tls"
 	"flag"
 	"log/slog"
 	"net"
 
 	"github.com/akojo/legion/config/flags"
-	"github.com/akojo/legion/server"
+	"github.com/akojo/legion/handler"
 )
 
-func ReadConfig() (*server.Config, error) {
+type Config struct {
+	Addr     string
+	LogLevel slog.Level
+	Routes   []handler.Route
+	TLS      *tls.Config
+}
+
+func ReadConfig() (*Config, error) {
 	configFile := flag.String("config", "", "path to configuration file")
 
 	var addr *string

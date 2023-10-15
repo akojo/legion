@@ -1,10 +1,11 @@
 package file
 
 import (
-	"io"
+	"crypto/tls"
 	"log/slog"
+	"os"
 
-	"github.com/akojo/legion/server"
+	"github.com/akojo/legion/handler"
 	"gopkg.in/yaml.v3"
 )
 
@@ -15,23 +16,42 @@ type YAML struct {
 	TLS    TLS        `yaml:"tls"`
 }
 
-func NewConfig(r io.Reader, conf *server.Config) error {
-	var c YAML
-	err := yaml.NewDecoder(r).Decode(&c)
+type Config struct {
+	Addr   string
+	Level  slog.Level
+	Routes []handler.Route
+	TLS    *tls.Config
+}
+
+func ReadConfig(filename string) (*Config, error) {
+	f, err := os.Open(filename)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	conf.Addr = c.Listen
-	conf.LogLevel = slog.Level(c.Level)
+	decoded := &YAML{}
+	err = yaml.NewDecoder(f).Decode(&decoded)
+	if err != nil {
+		return nil, err
+	}
 
-	conf.Routes, err = c.Routes.Get()
-	if err != nil {
-		return err
+	config := &Config{
+		Addr:  decoded.Listen,
+		Level: decoded.Level,
 	}
-	conf.TLS, err = c.TLS.GetConfig()
+
+	routes, err := decoded.Routes.Get()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	if len(routes) > 0 {
+		config.Routes = routes
+	}
+
+	config.TLS, err = decoded.TLS.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }
