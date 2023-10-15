@@ -27,7 +27,7 @@ func ReadConfig() (*Config, error) {
 		return err
 	})
 
-	var level LogLevel
+	var level flags.LogLevel
 	flag.Var(&level, "loglevel", "log level (info|warn|error)")
 
 	var routes flags.Routes
@@ -64,8 +64,8 @@ incoming paths map to actual requests:
 	if addr != nil {
 		conf.Addr = *addr
 	}
-	if slog.Level(level) != slog.LevelInfo {
-		conf.LogLevel = slog.Level(level)
+	if level.Level() != slog.LevelInfo {
+		conf.LogLevel = level.Level()
 	}
 	if len(routes) > 0 {
 		conf.Routes = routes

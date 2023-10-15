@@ -1,4 +1,4 @@
-package config
+package flags
 
 import (
 	"log/slog"
@@ -9,7 +9,7 @@ import (
 type LogLevel slog.Level
 
 func (l *LogLevel) String() string {
-	return slog.Level(*l).String()
+	return l.Level().String()
 }
 
 func (l *LogLevel) Set(value string) error {
@@ -18,4 +18,8 @@ func (l *LogLevel) Set(value string) error {
 
 func (l *LogLevel) UnmarshalYAML(value *yaml.Node) error {
 	return l.Set(value.Value)
+}
+
+func (l *LogLevel) Level() slog.Level {
+	return (slog.Level)(*l)
 }
