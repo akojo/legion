@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/akojo/legion/server"
@@ -30,7 +31,7 @@ func parseRoute(value string) (server.Route, error) {
 	if !found {
 		return server.Route{}, errors.New("missing '='")
 	}
-	targetURL, err := url.Parse(target)
+	targetURL, err := url.Parse(filepath.ToSlash(target))
 	if err != nil {
 		return server.Route{}, err
 	}

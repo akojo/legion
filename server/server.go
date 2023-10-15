@@ -2,9 +2,11 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -44,15 +46,19 @@ func (s *Server) AddRoute(route Route) error {
 
 func (s *Server) Run(log *slog.Logger) error {
 	server := http.Server{
-		Addr:    s.config.Addr,
 		Handler: logger.Middleware(log, s.mux),
+	}
+
+	listener, err := s.listen()
+	if err != nil {
+		return err
 	}
 
 	quit := make(chan os.Signal, 1)
 	hangup := make(chan error)
 
 	go func() {
-		err := server.ListenAndServe()
+		err := server.Serve(listener)
 		if errors.Is(err, http.ErrServerClosed) {
 			log.Info("server closed")
 		} else if err != nil {
@@ -69,6 +75,13 @@ func (s *Server) Run(log *slog.Logger) error {
 		return err
 	}
 
+}
+
+func (s *Server) listen() (net.Listener, error) {
+	if s.config.TLS != nil {
+		return tls.Listen("tcp", s.config.Addr, s.config.TLS)
+	}
+	return net.Listen("tcp", s.config.Addr)
 }
 
 func makeProxy(target *url.URL) (http.Handler, error) {

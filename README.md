@@ -82,9 +82,11 @@ Route target can be either
 
 Given a local path `legion` serves files from the specified directory. If
 incoming request specifies a directory and the target directory contains a file
-named `index.html`, contents of `index.html` are returned instead. If requested
-filename is `index.html` and the file exists, request will be redirected to its
-parent directory.
+named `index.html`, contents of `index.html` are returned instead. Otherwise
+directory contents are served as an HTML page.
+
+If requested filename is `index.html` and the file exists, request will be
+redirected to its parent directory.
 
 Given an HTTP/HTTPS URL `legion` acts as a reverse proxy, forwarding requests to
 the specified address. `legion` adds usual [forwarding
@@ -99,13 +101,12 @@ For example, given routes (see [configuration file syntax](#configuration-file)
 below)
 
 ```yaml
-routes:
-  static:
-  - source: /
-    target: /var/www/html
-  proxy:
-  - source: /api
-    target: http://localhost:3000/v1
+static:
+- source: /
+  target: /var/www/html
+proxy:
+- source: /api
+  target: http://localhost:3000/v1
 ```
 
 incoming requests map to targets as follows:
@@ -123,14 +124,79 @@ NB. in this case, according to `legion`'s routing rules, if file
 When started with an empty configuration `legion` serves files from current
 directory on port `8000` and writes access logs to stdout.
 
+### Configuration File
+
+Configuration file is written in YAML and allows specifying following settings
+
+```yaml
+listen: <addr>
+loglevel: <info|warn|error>
+tls:
+  certificates:
+  - <certificate1>
+  - <certificate2>
+  ...
+routes:
+  static:
+  - <route1>
+  - <route2>
+  ...
+  proxy:
+  - <route1>
+  - <route2>
+  ...
+```
+
+| Name       | Description                                                                                               | Values                                    | Default |
+|------------|-----------------------------------------------------------------------------------------------------------|-------------------------------------------|---------|
+| `listen`   | Listen on given address (i.e. network interface) and port. Omitting address will listen on all interfaces | `host:port`, `ip:port` or `:port`         | `:8000` |
+| `loglevel` | Set log minimum level. Request logs are suppressed when level is above `info`                             | `info\|warn\|error`                       | `info`  |
+
+#### TLS
+
+TLS section is optional. If defined it will contain a list of X.509
+certificate key pair files. If multiple certificates are defined, an appropriate
+one is selected based on incoming request.
+
+```yaml
+TLS:
+  certificates:
+  - certfile: <file>
+    keyfile: <file>
+```
+
+| Name       | Description                                  |
+|------------|----------------------------------------------|
+| `certfile` | Certificate public key file in X.509 format  |
+| `keyfile`  | Certificate private key file in X.509 format |
+
+#### Routes
+
+Routes define either static routes, serving files from local filesystem, or
+proxy routes, relaying request to an upstream server.
+
+```yaml
+routes:
+  static:
+  - source: <path>|<hostname/path>
+    target: <path>
+  ...
+  proxy:
+  - source: <path>|<hostname/path>
+    target: <url>
+```
+
+See [Routing](#routing) for more information on specifying routes.
+
 ### Command-line Options
 
-`legion` understands following command-line flags:
+In addition to configuration file, `legion` understands following command-line
+flags. Command-line flags override values in configuration file.
 
 - `-config <file>`
 
   Read configuration from specified file. Configuration file format is
-  documented [below](#configuration-file)
+  documented [above](#configuration-file)
 
 - `-listen <address>`
 
@@ -145,25 +211,6 @@ directory on port `8000` and writes access logs to stdout.
 
   Route requests from `source` to `target`. See [Routing](#routing) for
   specifying sources and targets.
-
-### Configuration File
-
-Configuration file is written in YAML format. An example configuration file is
-
-```yaml
-listen: localhost:8000
-loglevel: info
-routes:
-  static:
-  - source: /
-    target: /var/www/html
-  proxy:
-  - source: /api
-    target: http://localhost:3000/v1
-```
-
-Unlike command-line flags, configuration file makes a distinction between
-different types of routes for better readability.
 
 ## Forwarding headers
 
