@@ -31,11 +31,7 @@ func makeProxy(target *url.URL) (http.Handler, error) {
 }
 
 func makeFileHandler(target *url.URL) (http.Handler, error) {
-	proxy := &httputil.ReverseProxy{
-		Rewrite:   func(pr *httputil.ProxyRequest) {},
-		Transport: http.NewFileTransport(http.Dir(target.Path)),
-	}
-	return proxy, nil
+	return http.FileServer(http.Dir(target.Path)), nil
 }
 
 func makeHTTPHandler(target *url.URL) (http.Handler, error) {
