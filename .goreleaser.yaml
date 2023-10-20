@@ -7,19 +7,4 @@ snapshot:
   name_template: "{{ incpatch .Version }}-next"
 changelog:
   sort: asc
-  groups:
-    - title: Features
-      regexp: '^feat:'
-      order: 0
-    - title: Bug Fixes
-      regexp: '^fix:'
-      order: 1
-    - title: Other
-      order: 999
-  filters:
-    exclude:
-      - "^chore:"
-      - "^ci:"
-      - "^docs:"
-      - "^test:"
-      - "^Merge"
+  use: github-native
