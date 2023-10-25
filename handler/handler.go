@@ -1,41 +1,39 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
+	"strings"
 )
 
-func New(routes []Route) (http.Handler, error) {
-	mux := http.NewServeMux()
-	for _, route := range routes {
-		handler, err := makeProxy(route.Target)
-		if err != nil {
-			return nil, err
-		}
-		mux.Handle(route.Pattern(), http.StripPrefix(route.Prefix(), handler))
+type Handler struct {
+	*http.ServeMux
+}
+
+func New() *Handler {
+	return &Handler{ServeMux: http.NewServeMux()}
+}
+
+func (h *Handler) FileServer(source, dirname string) error {
+	dirname, err := ensureDir(dirname)
+	if err != nil {
+		return err
 	}
-	return mux, nil
+	return h.addHandler(source, http.FileServer(http.Dir(dirname)))
 }
 
-func makeProxy(target *url.URL) (http.Handler, error) {
-	switch target.Scheme {
-	case "", "file":
-		return makeFileHandler(target)
-	case "http", "https":
-		return makeHTTPHandler(target)
-	default:
-		return nil, fmt.Errorf("invalid scheme: %s", target.Scheme)
+func (h *Handler) ReverseProxy(source, URL string) error {
+	target, err := url.Parse(URL)
+	if err != nil {
+		return err
 	}
-}
+	target.Path = strings.TrimRight(target.EscapedPath(), "/")
 
-func makeFileHandler(target *url.URL) (http.Handler, error) {
-	return http.FileServer(http.Dir(target.Path)), nil
-}
-
-func makeHTTPHandler(target *url.URL) (http.Handler, error) {
-	proxy := &httputil.ReverseProxy{
+	handler := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.Out.Header["X-Forwarded-For"] = pr.In.Header["X-Forwarded-For"]
 			pr.SetXForwarded()
@@ -44,5 +42,34 @@ func makeHTTPHandler(target *url.URL) (http.Handler, error) {
 		},
 		Transport: http.DefaultTransport,
 	}
-	return proxy, nil
+	return h.addHandler(source, handler)
+}
+
+func (h *Handler) addHandler(source string, handler http.Handler) error {
+	pathStart := strings.Index(source, "/")
+	if pathStart < 0 {
+		return errors.New("source path must start with '/'")
+	}
+	pattern := strings.TrimRight(source, "/") + "/"
+	prefix := strings.TrimRight(source[pathStart:], "/")
+	h.Handle(pattern, http.StripPrefix(prefix, handler))
+	return nil
+}
+
+func ensureDir(dirname string) (string, error) {
+	if strings.HasPrefix(dirname, "file:") {
+		URL, err := url.Parse(dirname)
+		if err != nil {
+			return "", err
+		}
+		dirname = URL.Path
+	}
+	info, err := os.Stat(dirname)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%s: not a directory", dirname)
+	}
+	return dirname, nil
 }

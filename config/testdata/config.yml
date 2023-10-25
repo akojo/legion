@@ -1,0 +1,17 @@
+listen: :80
+loglevel: error
+tls:
+  certificates:
+  - certfile: domain.crt
+    keyfile: domain.key
+routes:
+  static:
+  - source: /plain
+    target: .
+  - source: /fileurl
+    target: file://www
+  proxy:
+  - source: /http
+    target: http://example.com/
+  - source: /https
+    target: https://example.com/

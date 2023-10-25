@@ -22,22 +22,39 @@ func main() {
 		Level: logLevel,
 	})))
 
-	conf, err := config.ReadConfig()
+	conf, err := config.ReadConfig(os.Args[1:])
 	if err != nil {
 		slog.Error("invalid configuration", "error", err)
 		os.Exit(1)
 	}
 
-	logLevel.Set(slog.Level(conf.LogLevel))
+	logLevel.Set(conf.LogLevel.Level)
 
-	h, err := handler.New(conf.Routes)
+	h := handler.New()
+	for _, route := range conf.Routes.Static {
+		err := h.FileServer(route.Source, route.Target)
+		if err != nil {
+			slog.Error("invalid route", "error", err)
+			os.Exit(1)
+		}
+	}
+	for _, route := range conf.Routes.Proxy {
+		err := h.ReverseProxy(route.Source, route.Target)
+		if err != nil {
+			slog.Error("invalid route", "error", err)
+			os.Exit(1)
+		}
+	}
+
+	tlsConfig, err := makeTLSConfig(conf.TLS)
 	if err != nil {
-		slog.Error("invalid routes", "error", err)
+		slog.Error("invalid TLS config", "error", err)
+		os.Exit(1)
 	}
 
 	srv := &http.Server{
 		Handler:   logger.Middleware(slog.Default(), h),
-		TLSConfig: conf.TLS,
+		TLSConfig: tlsConfig,
 	}
 
 	if err = listenAndServe(srv, conf.Addr); err != nil {
@@ -79,4 +96,23 @@ func listen(addr string, tlsConfig *tls.Config) (net.Listener, error) {
 		return tls.Listen("tcp", addr, tlsConfig)
 	}
 	return net.Listen("tcp", addr)
+}
+
+func makeTLSConfig(t config.TLS) (*tls.Config, error) {
+	if len(t.Certificates) == 0 {
+		return nil, nil
+	}
+
+	certs := make([]tls.Certificate, 0)
+	for _, c := range t.Certificates {
+		cert, err := tls.LoadX509KeyPair(c.CertFile, c.KeyFile)
+		if err != nil {
+			return nil, err
+		}
+		certs = append(certs, cert)
+	}
+	return &tls.Config{
+		Certificates: certs,
+		NextProtos:   []string{"h2"},
+	}, nil
 }

@@ -1,13 +1,14 @@
-package handler
+package handler_test
 
 import (
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/akojo/legion/handler"
 )
 
 func TestRedirects(t *testing.T) {
@@ -27,7 +28,7 @@ func TestRedirects(t *testing.T) {
 		{path: "/foo/../subdir", want: "/subdir"},
 	}
 
-	h := makeHandler(t, "/", "testdata/html")
+	h := makeFileserver(t, "/", "testdata/html")
 
 	for _, tc := range tests {
 		resp := GET(h, tc.path)
@@ -53,7 +54,7 @@ func TestGetPages(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		resp := GET(makeHandler(t, "/", "testdata/html"), tc.path)
+		resp := GET(makeFileserver(t, "/", "testdata/html"), tc.path)
 
 		if status := resp.Result().StatusCode; status != 200 {
 			t.Fatalf("%s: status: want 200, got %d", tc.path, status)
@@ -70,7 +71,7 @@ func TestProxy(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resp := GET(makeHandler(t, "/", server.URL), "/")
+	resp := GET(makeReverseProxy(t, "/", server.URL), "/")
 	if status := resp.Result().StatusCode; status != 200 {
 		t.Errorf("want 200, got %d", status)
 	}
@@ -94,7 +95,7 @@ func TestProxyHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resp := GET(makeHandler(t, "/", server.URL), "/")
+	resp := GET(makeReverseProxy(t, "/", server.URL), "/")
 	if status := resp.Result().StatusCode; status != 204 {
 		t.Errorf("response: want 204, got %d", status)
 	}
@@ -109,26 +110,26 @@ func TestProxyRewrite(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resp := GET(makeHandler(t, "/api", server.URL), "/api/pets/1")
+	resp := GET(makeReverseProxy(t, "/api", server.URL), "/api/pets/1")
 	if status := resp.Result().StatusCode; status != 204 {
 		t.Errorf("response: want 204, got %d", status)
 	}
 }
 
-func makeHandler(t *testing.T, source string, URL string) http.Handler {
-	target, err := url.Parse(URL)
-	if err != nil {
-		t.Fatalf("parse %#v: %v", URL, err)
+func makeFileserver(t *testing.T, source, path string) http.Handler {
+	h := handler.New()
+	if err := h.FileServer(source, path); err != nil {
+		t.Fatalf("fileserver %s=%s: %v", source, path, err)
 	}
-	route, err := NewRoute(source, target)
-	if err != nil {
-		t.Fatalf("route /=%s: %v", URL, err)
+	return h
+}
+
+func makeReverseProxy(t *testing.T, source, URL string) http.Handler {
+	h := handler.New()
+	if err := h.ReverseProxy(source, URL); err != nil {
+		t.Fatalf("proxy %s=%s: %v", source, URL, err)
 	}
-	handler, err := New([]Route{route})
-	if err != nil {
-		t.Fatalf("new handler: %v", err)
-	}
-	return handler
+	return h
 }
 
 func GET(h http.Handler, path string) *httptest.ResponseRecorder {

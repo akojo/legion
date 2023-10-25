@@ -11,7 +11,7 @@ func Middleware(log *slog.Logger, next http.Handler) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		writer := &responseWriter{ResponseWriter: w}
+		writer := &responseWriter{ResponseWriter: w, status: 200}
 
 		next.ServeHTTP(writer, r)
 
