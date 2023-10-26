@@ -51,6 +51,18 @@ func TestRouteFlag(t *testing.T) {
 	}
 }
 
+func TestRouteFlagWithURL(t *testing.T) {
+	conf := newConf(t, "-route", "/=http://example.com")
+	if got := len(conf.Routes.Proxy); got != 1 {
+		t.Errorf("Routes: want 1, got %v", got)
+	}
+	want := config.ProxyRoute{"/", "http://example.com"}
+	route := conf.Routes.Proxy[0]
+	if route != want {
+		t.Errorf("default: want %v, got %v", want, route)
+	}
+}
+
 func TestConfigFile(t *testing.T) {
 	conf := newConf(t, "-config", "testdata/config.yml")
 	if conf.Addr != ":80" {

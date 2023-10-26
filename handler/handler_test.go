@@ -65,6 +65,36 @@ func TestGetPages(t *testing.T) {
 	}
 }
 
+func TestNonExistentTargetDir(t *testing.T) {
+	h := handler.New()
+	err := h.FileServer("/", "./nosuchdir")
+	if err == nil {
+		t.Error("expect error")
+	} else if !strings.Contains(err.Error(), "nosuchdir") {
+		t.Errorf("expect %#v to contain 'nosuchdir'", err.Error())
+	}
+}
+
+func TestTargetNotADir(t *testing.T) {
+	h := handler.New()
+	err := h.FileServer("/", "testdata/html/index.html")
+	if err == nil {
+		t.Error("expect error")
+	} else if !strings.Contains(err.Error(), "index.html") {
+		t.Errorf("expect %#v to contain 'index.html'", err.Error())
+	}
+}
+
+func TestInvalidSource(t *testing.T) {
+	h := handler.New()
+	err := h.FileServer("invalidsource", ".")
+	if err == nil {
+		t.Error("expect error")
+	} else if !strings.Contains(err.Error(), "invalidsource") {
+		t.Errorf("expect %#v to contain 'invalidsource'", err.Error())
+	}
+}
+
 func TestProxy(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "hello from proxy")
@@ -113,6 +143,16 @@ func TestProxyRewrite(t *testing.T) {
 	resp := GET(makeReverseProxy(t, "/api", server.URL), "/api/pets/1")
 	if status := resp.Result().StatusCode; status != 204 {
 		t.Errorf("response: want 204, got %d", status)
+	}
+}
+
+func TestInvalidTargetURL(t *testing.T) {
+	h := handler.New()
+	err := h.ReverseProxy("/", "://example.com/foo")
+	if err == nil {
+		t.Error("expect error")
+	} else if !strings.Contains(err.Error(), "example.com") {
+		t.Errorf("expect %#v to contain 'example.com'", err.Error())
 	}
 }
 
