@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
@@ -48,7 +47,7 @@ func (h *Handler) ReverseProxy(source, URL string) error {
 func (h *Handler) addHandler(source string, handler http.Handler) error {
 	pathStart := strings.Index(source, "/")
 	if pathStart < 0 {
-		return errors.New("source path must start with '/'")
+		return fmt.Errorf("%s: source path must start with '/'", source)
 	}
 	pattern := strings.TrimRight(source, "/") + "/"
 	prefix := strings.TrimRight(source[pathStart:], "/")
@@ -57,13 +56,6 @@ func (h *Handler) addHandler(source string, handler http.Handler) error {
 }
 
 func ensureDir(dirname string) (string, error) {
-	if strings.HasPrefix(dirname, "file:") {
-		URL, err := url.Parse(dirname)
-		if err != nil {
-			return "", err
-		}
-		dirname = URL.Path
-	}
 	info, err := os.Stat(dirname)
 	if err != nil {
 		return "", err

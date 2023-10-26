@@ -6,10 +6,8 @@ tls:
     keyfile: domain.key
 routes:
   static:
-  - source: /plain
+  - source: /
     target: .
-  - source: /fileurl
-    target: file://www
   proxy:
   - source: /http
     target: http://example.com/

@@ -77,7 +77,6 @@ Route target can be either
 
 - A local filesystem path, e.g. `/var/www/html`. Paths can be relative, in which
   case they are interpreted relative to `legion`'s current working directory.
-  `file:` URLs are also accepted.
 - An HTTP/HTTPS URL, e.g. `https://www.example.com/api/v1`
 
 Given a local path `legion` serves files from the specified directory. If

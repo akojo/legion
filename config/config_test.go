@@ -69,17 +69,12 @@ func TestConfigFile(t *testing.T) {
 		t.Errorf("TLS cert: want %s, got %s", cert, got)
 	}
 
-	statics := []config.StaticRoute{
-		{"/plain", "."},
-		{"/fileurl", "file://www"},
+	static := config.StaticRoute{"/", "."}
+	if got := len(conf.Routes.Static); got != 1 {
+		t.Errorf("static routes: want 1, got %d", got)
 	}
-	if got := len(conf.Routes.Static); got != 2 {
-		t.Errorf("static routes: want 2, got %d", got)
-	}
-	for i, route := range conf.Routes.Static {
-		if route != statics[i] {
-			t.Errorf("static route %d: want %s, got %s", i, statics[i], route)
-		}
+	if got := conf.Routes.Static[0]; got != static {
+		t.Errorf("static route: want %s, got %s", static, got)
 	}
 
 	proxies := []config.ProxyRoute{
