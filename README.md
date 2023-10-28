@@ -214,11 +214,19 @@ flags. Command-line flags override values in configuration file.
 ## Forwarding headers
 
 When acting as a reverse proxy `legion` always adds forwarding headers
-(`X-Forwarded-For`, `X-Forwarded-Host` and `X-Forwarded-Proto`) to outgoing
-requests. If an existing `X-Forwarded-For` is found in inbound request it is
-retained and client IP is appended to its value.
+(`X-Forwarded-For`, `X-Forwarded-Proto`) to outgoing requests.
 
-`Host` header of inbound requests is kept copied as-is to outgoing requests.
+If an existing `X-Forwarded-For` is found in inbound request it is retained and
+client IP is appended to its value. Otherwise new `X-Forwarded-For` is added
+with inbound request client IP.
+
+Existing `X-Forwarded-Proto` in inbound request is copied to outbound request.
+Otherwise new `X-Forwaded-Proto` is added based on whether inbound request used
+TLS.
+
+`legion` never adds `X-Forwarded-Host` header to outboud requests. If an
+`X-Forwarded-Host` header is present in an inbound request, its value is used as
+`Host` header in outboud request. Otherwise `Host` of inbound request is used.
 
 ## Access log format
 

@@ -11,6 +11,25 @@ import (
 	"github.com/akojo/legion/handler"
 )
 
+var emptyHeader = http.Header{}
+
+type BenchmarkResponseWriter struct{}
+
+func (w *BenchmarkResponseWriter) Header() http.Header {
+	return emptyHeader
+}
+
+func (w *BenchmarkResponseWriter) Write([]byte) (int, error) {
+	return 0, nil
+}
+
+func (w *BenchmarkResponseWriter) WriteHeader(statusCode int) {
+}
+
+func NewBenchmarkResponseWriter() *BenchmarkResponseWriter {
+	return &BenchmarkResponseWriter{}
+}
+
 func TestRedirects(t *testing.T) {
 	type test struct {
 		path string
@@ -112,23 +131,92 @@ func TestProxy(t *testing.T) {
 
 func TestProxyHeaders(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Host != "example.com" {
-			t.Errorf("Host: want 'example.com', got %#v", r.Host)
+		host := "host.example.com"
+		if r.Host != host {
+			t.Errorf("Host: want %#v, got %#v", host, r.Host)
 		}
-		if r.Header.Get("X-Forwarded-Host") != "example.com" {
-			t.Errorf("X-Forwarded-Host: want 'example.com', got %#v", r.Host)
-		}
-		if r.Header.Get("X-Forwarded-Proto") != "http" {
-			t.Errorf("X-Forwarded-Proto: want 'http', got %#v", r.Host)
+		if got := r.Header.Get("X-Forwarded-Proto"); got != "http" {
+			t.Errorf("X-Forwarded-Proto: want 'http', got %#v", got)
 		}
 		w.WriteHeader(204)
 	}))
 	defer server.Close()
 
-	resp := GET(makeReverseProxy(t, "/", server.URL), "/")
+	resp := GET(makeReverseProxy(t, "/", server.URL), "http://host.example.com/")
 	if status := resp.Result().StatusCode; status != 204 {
 		t.Errorf("response: want 204, got %d", status)
 	}
+}
+
+func TestXForwardedProto(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-Forwarded-Proto"); got != "https" {
+			t.Errorf("X-Forwarded-Proto: want 'https', got %#v", got)
+		}
+		w.WriteHeader(204)
+	}))
+	defer server.Close()
+
+	resp := GET(makeReverseProxy(t, "/", server.URL), "https://example.com/")
+	if got := resp.Result().StatusCode; got != 204 {
+		t.Errorf("want 204, got %d", got)
+	}
+}
+
+func TestForwardingForHeader(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		want := "1.1.1.1, "
+		if got := r.Header.Get("X-Forwarded-For"); !strings.Contains(got, want) {
+			t.Errorf("expect %#v to contain %#v", got, want)
+		}
+		w.WriteHeader(204)
+	}))
+	defer server.Close()
+
+	h := makeReverseProxy(t, "/", server.URL)
+
+	req := httptest.NewRequest("GET", "http://example.com/", nil)
+	req.Header.Set("X-Forwarded-For", "1.1.1.1")
+	resp := httptest.NewRecorder()
+
+	h.ServeHTTP(resp, req)
+}
+
+func TestForwardingProtoHeader(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-Forwarded-Proto"); got != "https" {
+			t.Errorf("want 'https', got %#v", got)
+		}
+		w.WriteHeader(204)
+	}))
+	defer server.Close()
+
+	h := makeReverseProxy(t, "/", server.URL)
+
+	req := httptest.NewRequest("GET", "http://example.com/", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	resp := httptest.NewRecorder()
+
+	h.ServeHTTP(resp, req)
+}
+
+func TestForwardingHostHeader(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		want := "forwarded.example.com"
+		if got := r.Host; got != want {
+			t.Errorf("Host: want %#v, got %#v", want, got)
+		}
+		w.WriteHeader(204)
+	}))
+	defer server.Close()
+
+	h := makeReverseProxy(t, "/", server.URL)
+
+	req := httptest.NewRequest("GET", "http://example.com/", nil)
+	req.Header.Set("X-Forwarded-Host", "forwarded.example.com")
+	resp := httptest.NewRecorder()
+
+	h.ServeHTTP(resp, req)
 }
 
 func TestProxyRewrite(t *testing.T) {
@@ -163,8 +251,26 @@ func BenchmarkFileServer(b *testing.B) {
 	}
 
 	req := httptest.NewRequest("GET", "/", nil)
+	w := NewBenchmarkResponseWriter()
 	for i := 0; i < b.N; i++ {
-		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+	}
+}
+
+func BenchmarkReverseProxy(b *testing.B) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(204)
+	}))
+	defer server.Close()
+
+	h := handler.New()
+	if err := h.ReverseProxy("/", server.URL); err != nil {
+		b.Fatalf("proxy /=%s: %v", server.URL, err)
+	}
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := NewBenchmarkResponseWriter()
+	for i := 0; i < b.N; i++ {
 		h.ServeHTTP(w, req)
 	}
 }

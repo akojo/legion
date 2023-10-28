@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -33,15 +34,48 @@ func (h *Handler) ReverseProxy(source, URL string) error {
 	target.Path = strings.TrimRight(target.EscapedPath(), "/")
 
 	handler := &httputil.ReverseProxy{
-		Rewrite: func(pr *httputil.ProxyRequest) {
-			pr.Out.Header["X-Forwarded-For"] = pr.In.Header["X-Forwarded-For"]
-			pr.SetXForwarded()
-			pr.SetURL(target)
-			pr.Out.Host = pr.In.Host
+		Rewrite: func(r *httputil.ProxyRequest) {
+			setURL(r.Out.URL, target)
+			setHeaders(r)
 		},
 		Transport: http.DefaultTransport,
 	}
 	return h.addHandler(source, handler)
+}
+
+func setURL(u *url.URL, target *url.URL) {
+	u.Scheme = target.Scheme
+	u.Host = target.Host
+	u.Path, u.RawPath = u.Path+target.Path, u.EscapedPath()+target.Path
+}
+
+func setHeaders(r *httputil.ProxyRequest) {
+	clientIP, _, err := net.SplitHostPort(r.In.RemoteAddr)
+	if err == nil {
+		prior := r.In.Header["X-Forwarded-For"]
+		if len(prior) > 0 {
+			clientIP = strings.Join(prior, ", ") + ", " + clientIP
+		}
+		r.Out.Header.Set("X-Forwarded-For", clientIP)
+	} else {
+		r.Out.Header.Del("X-Forwarded-For")
+	}
+
+	host := r.In.Header.Get("X-Forwarded-Host")
+	if len(host) > 0 {
+		r.Out.Host = host
+	} else {
+		r.Out.Host = r.In.Host
+	}
+
+	proto := r.In.Header.Get("X-Forwarded-Proto")
+	if len(proto) > 0 {
+		r.Out.Header.Set("X-Forwarded-Proto", proto)
+	} else if r.In.TLS == nil {
+		r.Out.Header.Set("X-Forwarded-Proto", "http")
+	} else {
+		r.Out.Header.Set("X-Forwarded-Proto", "https")
+	}
 }
 
 func (h *Handler) addHandler(source string, handler http.Handler) error {
