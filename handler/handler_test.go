@@ -156,6 +156,19 @@ func TestInvalidTargetURL(t *testing.T) {
 	}
 }
 
+func BenchmarkFileServer(b *testing.B) {
+	h := handler.New()
+	if err := h.FileServer("/", "testdata/html"); err != nil {
+		b.Fatalf("/=testdata/html: %v", err)
+	}
+
+	req := httptest.NewRequest("GET", "/", nil)
+	for i := 0; i < b.N; i++ {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+	}
+}
+
 func makeFileserver(t *testing.T, source, path string) http.Handler {
 	h := handler.New()
 	if err := h.FileServer(source, path); err != nil {
