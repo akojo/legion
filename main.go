@@ -24,8 +24,7 @@ func main() {
 
 	conf, err := config.ReadConfig(os.Args[1:])
 	if err != nil {
-		slog.Error("invalid configuration", "error", err)
-		os.Exit(1)
+		Fatal("invalid configuration", "error", err)
 	}
 
 	logLevel.Set(conf.LogLevel.Level)
@@ -34,22 +33,19 @@ func main() {
 	for _, route := range conf.Routes.Static {
 		err := h.FileServer(route.Source, route.Target)
 		if err != nil {
-			slog.Error("invalid route", "error", err)
-			os.Exit(1)
+			Fatal("invalid route", "error", err)
 		}
 	}
 	for _, route := range conf.Routes.Proxy {
 		err := h.ReverseProxy(route.Source, route.Target)
 		if err != nil {
-			slog.Error("invalid route", "error", err)
-			os.Exit(1)
+			Fatal("invalid route", "error", err)
 		}
 	}
 
 	tlsConfig, err := makeTLSConfig(conf.TLS)
 	if err != nil {
-		slog.Error("invalid TLS config", "error", err)
-		os.Exit(1)
+		Fatal("invalid TLS config", "error", err)
 	}
 
 	srv := &http.Server{
@@ -58,8 +54,7 @@ func main() {
 	}
 
 	if err = listenAndServe(srv, conf.Addr); err != nil {
-		slog.Error("server closed unexpectedly", "error", err)
-		os.Exit(1)
+		Fatal("server closed unexpectedly", "error", err)
 	}
 }
 
@@ -115,4 +110,9 @@ func makeTLSConfig(t config.TLS) (*tls.Config, error) {
 		Certificates: certs,
 		NextProtos:   []string{"h2"},
 	}, nil
+}
+
+func Fatal(msg string, args ...any) {
+	slog.Error(msg, args...)
+	os.Exit(1)
 }
