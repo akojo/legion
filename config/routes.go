@@ -17,7 +17,8 @@ func (r *Routes) Set(value string) error {
 	}
 	if strings.HasPrefix(target, "http:") || strings.HasPrefix(target, "https:") {
 		r.Proxy = append(r.Proxy, ProxyRoute{source, target})
+	} else {
+		r.Static = append(r.Static, StaticRoute{source, target})
 	}
-	r.Static = append(r.Static, StaticRoute{source, target})
 	return nil
 }

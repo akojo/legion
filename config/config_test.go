@@ -61,6 +61,9 @@ func TestRouteFlagWithURL(t *testing.T) {
 	if route != want {
 		t.Errorf("default: want %v, got %v", want, route)
 	}
+	if got := len(conf.Routes.Static); got != 0 {
+		t.Errorf("want no static routes, got %d", got)
+	}
 }
 
 func TestConfigFile(t *testing.T) {
