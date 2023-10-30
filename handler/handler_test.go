@@ -30,7 +30,7 @@ func NewBenchmarkResponseWriter() *BenchmarkResponseWriter {
 	return &BenchmarkResponseWriter{}
 }
 
-func TestRedirects(t *testing.T) {
+func TestFileServerRedirects(t *testing.T) {
 	type test struct {
 		path string
 		want string
@@ -61,7 +61,7 @@ func TestRedirects(t *testing.T) {
 	}
 }
 
-func TestGetPages(t *testing.T) {
+func TestFileServerPages(t *testing.T) {
 	type test struct {
 		path  string
 		title string
@@ -70,10 +70,92 @@ func TestGetPages(t *testing.T) {
 		{path: "/", title: "Main Page"},
 		{path: "/subdir/", title: "Subdirectory"},
 		{path: "/subpage.html", title: "Subpage"},
+		{path: "/noindex/noindex.html", title: "No Index"},
 	}
 
+	h := makeFileserver(t, "/", "testdata/html")
+
 	for _, tc := range tests {
-		resp := GET(makeFileserver(t, "/", "testdata/html"), tc.path)
+		resp := GET(h, tc.path)
+
+		if status := resp.Result().StatusCode; status != 200 {
+			t.Fatalf("%s: status: want 200, got %d", tc.path, status)
+		}
+		if title := readTitle(t, resp.Result()); title != tc.title {
+			t.Errorf("%s: want %#v, got %#v", tc.path, tc.title, title)
+		}
+	}
+}
+
+func TestWebServerOnlyServesFiles(t *testing.T) {
+	type test struct {
+		path string
+		want int
+	}
+	tests := []test{
+		{"/", 200},
+		{"/index.html", 301},
+		{"/subpage.html", 200},
+		{"/nosuchpage.html", 404},
+		{"/subdir", 301},
+		{"/subdir/", 200},
+		{"/noindex", 404},
+		{"/noindex/", 404},
+		{"/noindex/noindex.html", 200},
+	}
+
+	h := makeWebServer(t, "/", "testdata/html")
+
+	for _, tc := range tests {
+		resp := GET(h, tc.path)
+
+		if got := resp.Result().StatusCode; got != tc.want {
+			t.Fatalf("%s: status: want %d, got %d", tc.path, tc.want, got)
+		}
+	}
+}
+
+func TestWebServerRedirects(t *testing.T) {
+	type test struct {
+		path string
+		want string
+	}
+	tests := []test{
+		{"/index.html", "./"},
+		{"/subdir", "subdir/"},
+		{"/subdir/index.html", "./"},
+	}
+
+	h := makeWebServer(t, "/", "testdata/html")
+
+	for _, tc := range tests {
+		resp := GET(h, tc.path)
+
+		if got := resp.Result().StatusCode; got != 301 {
+			t.Errorf("%s: status: want 301, got %d", tc.path, got)
+		}
+		if got := resp.Result().Header.Get("Location"); got != tc.want {
+			t.Errorf("%s: location: want %#v, got %#v", tc.path, tc.want, got)
+		}
+	}
+}
+
+func TestWebServerPages(t *testing.T) {
+	type test struct {
+		path  string
+		title string
+	}
+	tests := []test{
+		{path: "/", title: "Main Page"},
+		{path: "/subdir/", title: "Subdirectory"},
+		{path: "/subpage.html", title: "Subpage"},
+		{path: "/noindex/noindex.html", title: "No Index"},
+	}
+
+	h := makeWebServer(t, "/", "testdata/html")
+
+	for _, tc := range tests {
+		resp := GET(h, tc.path)
 
 		if status := resp.Result().StatusCode; status != 200 {
 			t.Fatalf("%s: status: want 200, got %d", tc.path, status)
@@ -269,6 +351,19 @@ func BenchmarkFileServer(b *testing.B) {
 	}
 }
 
+func BenchmarkWebServer(b *testing.B) {
+	h := handler.New()
+	if err := h.WebServer("/", "testdata/html"); err != nil {
+		b.Fatalf("/=testdata/html: %v", err)
+	}
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := NewBenchmarkResponseWriter()
+	for i := 0; i < b.N; i++ {
+		h.ServeHTTP(w, req)
+	}
+}
+
 func BenchmarkReverseProxy(b *testing.B) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(204)
@@ -290,6 +385,14 @@ func BenchmarkReverseProxy(b *testing.B) {
 func makeFileserver(t *testing.T, source, path string) http.Handler {
 	h := handler.New()
 	if err := h.FileServer(source, path); err != nil {
+		t.Fatalf("fileserver %s=%s: %v", source, path, err)
+	}
+	return h
+}
+
+func makeWebServer(t *testing.T, source, path string) http.Handler {
+	h := handler.New()
+	if err := h.WebServer(source, path); err != nil {
 		t.Fatalf("fileserver %s=%s: %v", source, path, err)
 	}
 	return h
