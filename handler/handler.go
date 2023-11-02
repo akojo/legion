@@ -46,7 +46,7 @@ func (h *Handler) ReverseProxy(source, URL string) error {
 func setURL(u *url.URL, target *url.URL) {
 	u.Scheme = target.Scheme
 	u.Host = target.Host
-	u.Path, u.RawPath = u.Path+target.Path, u.EscapedPath()+target.Path
+	u.Path, u.RawPath = target.Path+u.Path, target.Path+u.EscapedPath()
 }
 
 func setHeaders(r *httputil.ProxyRequest) {

@@ -219,18 +219,30 @@ func TestForwardingHostHeader(t *testing.T) {
 	h.ServeHTTP(resp, req)
 }
 
-func TestProxyRewrite(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/pets/1" {
-			t.Errorf("path: want '/pets/1', got %#v", r.URL.Path)
-		}
-		w.WriteHeader(204)
-	}))
-	defer server.Close()
+func TestProxyRewrites(t *testing.T) {
+	type test struct {
+		source, target, request, want string
+	}
+	tests := []test{
+		{"/", "/base", "/api/pets/1", "/base/api/pets/1"},
+		{"/api", "/", "/api/pets/1", "/pets/1"},
+		{"/api", "/base", "/api/pets/1", "/base/pets/1"},
+	}
 
-	resp := GET(makeReverseProxy(t, "/api", server.URL), "/api/pets/1")
-	if status := resp.Result().StatusCode; status != 204 {
-		t.Errorf("response: want 204, got %d", status)
+	for _, tc := range tests {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if got := r.URL.Path; got != tc.want {
+				t.Errorf("path: want %#v, got %#v", tc.want, got)
+			}
+			w.WriteHeader(204)
+		}))
+		defer server.Close()
+
+		h := makeReverseProxy(t, tc.source, server.URL+tc.target)
+		resp := GET(h, tc.request)
+		if status := resp.Result().StatusCode; status != 204 {
+			t.Errorf("response: want 204, got %d", status)
+		}
 	}
 }
 
